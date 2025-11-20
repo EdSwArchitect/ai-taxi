@@ -52,7 +52,7 @@ services:
 
   # OpenSearch
   opensearch:
-    image: opensearchproject/opensearch:2.11.0
+    image: opensearchproject/opensearch:3.3.0
     container_name: ai-taxi-opensearch
     environment:
       - discovery.type=single-node
@@ -82,7 +82,7 @@ services:
 
   # OpenSearch Dashboards (optional, but useful)
   opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:2.11.0
+    image: opensearchproject/opensearch-dashboards:3.3.0
     container_name: ai-taxi-opensearch-dashboards
     ports:
       - "5601:5601"

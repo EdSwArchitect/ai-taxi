@@ -1,0 +1,302 @@
+version: "3.8"
+
+# ============================================================================
+# DOCKER COMPOSE SETUP FOR OPENSEARCH WITH SSL/TLS
+# ============================================================================
+#
+# This docker-compose file sets up OpenSearch 3.3.2 with SSL/TLS enabled,
+# along with supporting services (PostgreSQL, Kafka, OpenSearch Dashboards, Grafana).
+#
+# PREREQUISITES:
+# --------------
+# 1. Ensure SSL certificates are available in the ./certs directory:
+#    - certs/opensearch-keystore.jks
+#    - certs/truststore.jks
+#
+#    If certificates don't exist, you can generate them using OpenSearch tools
+#    or copy from the opensearch-tls/certs directory.
+#
+# 2. The certificates should have password: "changeit"
+#
+# STARTING SERVICES:
+# ------------------
+# 1. Start all services:
+#    docker-compose -f docker-compose-ssl-2.yaml up -d
+#
+# 2. Check OpenSearch is running (wait 30-60 seconds for startup):
+#    docker-compose -f docker-compose-ssl-2.yaml ps
+#
+# 3. Verify OpenSearch health:
+#    curl -k -u admin:admin https://localhost:9200/_cluster/health
+#
+# 4. Access OpenSearch Dashboards:
+#    http://localhost:5601
+#    Username: admin
+#    Password: admin
+#
+# STOPPING SERVICES:
+# ------------------
+#    docker-compose -f docker-compose-ssl-2.yaml down
+#
+# To remove volumes (WARNING: deletes all data):
+#    docker-compose -f docker-compose-ssl-2.yaml down -v
+#
+# RUNNING THE TEST CLASS:
+# -----------------------
+# The OpenSearchClientExample test class connects to the OpenSearch cluster
+# with SSL/TLS enabled.
+#
+# 1. Ensure services are running (see STARTING SERVICES above)
+#
+# 2. Verify truststore is available:
+#    ls -la src/test/resources/truststore.jks
+#
+# 3. Run the test using Maven:
+#    mvn test -Dtest=OpenSearchClientExample#testConnection
+#
+#    Or run via IDE:
+#    - Right-click on OpenSearchClientExample.java
+#    - Select "Run testConnection()"
+#
+# 4. Expected output:
+#    - Testing connection to OpenSearch...
+#    - Cluster name: opensearch-cluster
+#    - Cluster UUID: <uuid>
+#    - Version: 3.3.2
+#
+# CONFIGURATION NOTES:
+# --------------------
+# - OpenSearch hostname in Java code:
+#   * When running from host machine: use "localhost"
+#   * When running inside Docker network: use "opensearch-node1"
+# - OpenSearch port: 9200 (HTTPS)
+# - Admin username: admin
+# - Admin password: admin (set in OPENSEARCH_INITIAL_ADMIN_PASSWORD but test uses "admin")
+# - SSL truststore: src/test/resources/truststore.jks (password: changeit)
+#
+# TROUBLESHOOTING:
+# ----------------
+# 1. Connection refused:
+#    - Wait for OpenSearch to fully start (check logs: docker-compose -f docker-compose-ssl-2.yaml logs opensearch-node1)
+#    - Verify port 9200 is not in use: lsof -i :9200
+#
+# 2. SSL/TLS errors:
+#    - Verify certificates exist: ls -la ./certs/
+#    - Check truststore path in test class matches actual location
+#    - Ensure truststore password is "changeit"
+#
+# 3. Authentication errors:
+#    - Verify credentials: username=admin, password=admin
+#    - Check OPENSEARCH_INITIAL_ADMIN_PASSWORD matches expected password
+#
+# 4. Hostname resolution:
+#    - In Java code, use "localhost" when running from host machine (port 9200 is mapped)
+#    - Use "opensearch-node1" only when running Java code inside Docker network
+#    - From host machine, use "localhost" for curl commands
+#
+# ============================================================================
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: ai-taxi-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_taxi
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ai-taxi-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka with KRaft (no Zookeeper needed)
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: ai-taxi-kafka
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    volumes:
+      - kafka_data:/tmp/kraft-combined-logs
+    networks:
+      - ai-taxi-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # OpenSearch with SSL/TLS enabled using Java keystore
+  opensearch-node1:
+    # image: opensearchproject/opensearch:2.15.0
+    image: opensearchproject/opensearch:3.3.2
+    container_name: opensearch-node1
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node1
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=SuperSecret123!
+
+      # Security plugin on
+      - plugins.security.disabled=false
+      - DISABLE_SECURITY_PLUGIN=false
+#
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+
+      # Optional, for initial index
+      - plugins.security.allow_default_init_securityindex=true
+
+      # --- HTTP TLS (REST) ---
+      - plugins.security.ssl.http.enabled=true
+      - plugins.security.ssl.http.keystore_type=JKS
+      - plugins.security.ssl.http.keystore_filepath=certs/opensearch-keystore.jks
+      - plugins.security.ssl.http.keystore_password=changeit
+      - plugins.security.ssl.http.keystore_alias=opensearch-node1
+
+      - plugins.security.ssl.http.truststore_type=JKS
+      - plugins.security.ssl.http.truststore_filepath=certs/truststore.jks
+      - plugins.security.ssl.http.truststore_password=changeit
+
+      # --- Transport TLS (node-to-node) ---
+      - plugins.security.ssl.transport.enabled=true
+      - plugins.security.ssl.transport.enforce_hostname_verification=false
+      - plugins.security.ssl.transport.keystore_type=JKS
+      - plugins.security.ssl.transport.keystore_filepath=certs/opensearch-keystore.jks
+      - plugins.security.ssl.transport.keystore_password=changeit
+      - plugins.security.ssl.transport.keystore_alias=opensearch-node1
+
+      - plugins.security.ssl.transport.truststore_type=JKS
+      - plugins.security.ssl.transport.truststore_filepath=certs/truststore.jks
+      - plugins.security.ssl.transport.truststore_password=changeit
+
+      # Admin DN should match a cert DN you actually use for admin operations
+      - plugins.security.authcz.admin_dn=CN=opensearch-node1
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - opensearch-data1:/usr/share/opensearch/data
+      - ./certs:/usr/share/opensearch/config/certs:ro
+    ports:
+      - "9200:9200"  # HTTPS
+      - "9600:9600"  # Performance analyzer
+    networks:
+      - ai-taxi-network
+
+  opensearch-dashboards:
+    # image: opensearchproject/opensearch-dashboards:2.15.0
+    image: opensearchproject/opensearch-dashboards:3.3.0
+    container_name: opensearch-dashboards
+    depends_on:
+      - opensearch-node1
+    environment:
+      # Point Dashboards to the HTTPS OpenSearch endpoint
+      - OPENSEARCH_HOSTS=["https://opensearch-node1:9200"]
+
+      # Use the admin user from the demo security config
+      - OPENSEARCH_USERNAME=admin
+      # - OPENSEARCH_PASSWORD=AdminPassw0rd!
+      - OPENSEARCH_PASSWORD=admin
+
+      # For a self-signed cert in dev, easiest is to disable verification here
+      - OPENSEARCH_SSL_VERIFICATIONMODE=none
+
+      # Standard Dashboards server options
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=5601
+
+    # volumes:
+    #   - ./dashboards/opensearch_dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml:ro
+    #   - ./certs/admin-keystore.jks:/usr/share/opensearch-dashboards/config/admin-keystore.jks:ro
+    #   - ./certs/truststore.jks:/usr/share/opensearch-dashboards/config/truststore.jks:ro
+
+    ports:
+      - "5601:5601"
+    networks:
+      - ai-taxi-network
+
+  # opensearch-dashboards:
+  #   image: opensearchproject/opensearch-dashboards:3.0.0
+  #   container_name: opensearch-dashboards
+  #   depends_on:
+  #     - opensearch-node1
+
+  #   environment:
+  #     - OPENSEARCH_HOSTS=["https://opensearch-node1:9200"]
+
+  #   volumes:
+  #     - ./dashboards/opensearch_dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml:ro
+  #     - ./certs/admin-keystore.jks:/usr/share/opensearch-dashboards/config/admin-keystore.jks:ro
+  #     - ./certs/truststore.jks:/usr/share/opensearch-dashboards/config/truststore.jks:ro
+
+  #   ports:
+  #     - "5601:5601"  # HTTPS Dashboards
+
+  #   networks:
+  #     - ai-taxi-network
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: ai-taxi-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - ai-taxi-network
+    depends_on:
+      - postgres
+      - opensearch-node1
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  kafka_data:
+    driver: local
+  opensearch_data:
+    driver: local
+  opensearch-data1:
+    driver: local
+  opensearch_config:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  ai-taxi-network:
+    driver: bridge
+

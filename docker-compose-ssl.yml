@@ -1,0 +1,170 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: ai-taxi-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_taxi
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ai-taxi-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka with KRaft (no Zookeeper needed)
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: ai-taxi-kafka
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    volumes:
+      - kafka_data:/tmp/kraft-combined-logs
+    networks:
+      - ai-taxi-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # OpenSearch with SSL/TLS enabled using Java keystore
+  opensearch:
+    image: opensearchproject/opensearch:3.3.0
+    container_name: ai-taxi-opensearch
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      # Configure Java to use the keystore for SSL/TLS
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m -Djavax.net.ssl.trustStore=/usr/share/opensearch/config/self-signed.jks -Djavax.net.ssl.trustStorePassword=edwinpass -Djavax.net.ssl.keyStore=/usr/share/opensearch/config/self-signed.jks -Djavax.net.ssl.keyStorePassword=edwinpass -Djavax.net.debug=true"
+      - "DISABLE_INSTALL_DEMO_CONFIG=true"
+      # Enable security plugin for SSL/TLS
+      - "DISABLE_SECURITY_PLUGIN=false"
+      # Configure SSL/TLS - Note: OpenSearch security plugin uses PEM format by default
+      # For JKS keystore, we configure via Java system properties above
+      # If you need to use PEM format, convert the keystore first
+      - "plugins.security.ssl.transport.enforce_hostname_verification=false"
+      - "plugins.security.ssl.transport.resolve_hostname=false"
+      - "plugins.security.ssl.http.enabled=true"
+      # Basic authentication
+      - "plugins.security.authcz.admin_dn=CN=admin"
+      - "plugins.security.check_snapshot_restore_privilege=true"
+      - "plugins.security.enable_snapshot_restore_privilege=true"
+      - "plugins.security.nodes_dn_dynamic_config_enabled=true"
+      - "plugins.security.audit.type=internal_opensearch"
+      - "plugins.security.enable_rest_auth_internal=true"
+      - "plugins.security.restapi.roles_enabled=ALL_ACCESS"
+      - "plugins.security.system_indices.enabled=true"
+      - "plugins.security.system_indices.indices=[.plugins-ml-model,.plugins-ml-task,.opensearch-observability,.opendistro-alerting-config,.opendistro-alerting-alert*,.opendistro-anomaly-detector*,.opendistro-reports-*,.opensearch-notifications-*,.opensearch-notebooks,.opensearch-query-workbench,.opensearch-ml-*,.opensearch-observability,.opensearch-observability-*]"
+      # Initial admin credentials
+      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=admin"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+      # Mount the Java keystore file
+      - ./src/test/resources/self-signed.jks:/usr/share/opensearch/config/self-signed.jks:ro
+      # Mount a directory for OpenSearch config (if you need to convert keystore to PEM format)
+      - opensearch_config:/usr/share/opensearch/config
+    networks:
+      - ai-taxi-network
+    healthcheck:
+      # Use HTTPS for healthcheck
+      test: ["CMD-SHELL", "curl -k -f https://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # OpenSearch Dashboards with SSL/TLS
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:3.3.0
+    container_name: ai-taxi-opensearch-dashboards
+    ports:
+      - "5601:5601"
+    environment:
+      # Connect to OpenSearch via HTTPS
+      - 'OPENSEARCH_HOSTS=["https://opensearch:9200"]'
+      - "OPENSEARCH_USERNAME=admin"
+      - "OPENSEARCH_PASSWORD=admin"
+      # SSL verification settings
+      - "OPENSEARCH_SSL_VERIFICATIONMODE=none"
+      - "DISABLE_SECURITY_DASHBOARDS_PLUGIN=false"
+    depends_on:
+      - opensearch
+    networks:
+      - ai-taxi-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: ai-taxi-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - ai-taxi-network
+    depends_on:
+      - postgres
+      - opensearch
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  kafka_data:
+    driver: local
+  opensearch_data:
+    driver: local
+  opensearch_config:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  ai-taxi-network:
+    driver: bridge
+

@@ -98,15 +98,34 @@ OpenSearchIndexUtil util = new OpenSearchIndexUtil(client);
 
 ## Docker Compose
 
-The project includes a `docker-compose.yml` file for running a complete development environment with:
+The project includes two docker-compose files for running a complete development environment:
+
+### Standard Configuration (`docker-compose.yml`)
+
+The standard configuration runs all services with security disabled for easy development:
 
 - **PostgreSQL** (port 5432) - Database service
 - **Kafka** (ports 9092, 9093, 9094) - Message broker
-- **OpenSearch** (port 9200) - Search and analytics engine (version 3.3.0)
+- **OpenSearch** (port 9200) - Search and analytics engine (version 3.3.0) with security disabled
 - **OpenSearch Dashboards** (port 5601) - Visualization and management UI
 - **Grafana** (port 3000) - Monitoring and observability
 
+### SSL/TLS Configuration (`docker-compose-ssl.yml`)
+
+The SSL-enabled configuration runs OpenSearch with SSL/TLS using a Java keystore:
+
+- All services from the standard configuration
+- **OpenSearch** with SSL/TLS enabled using `self-signed.jks` keystore
+- Security plugin enabled with basic authentication
+- HTTPS connections required
+
+**Prerequisites for SSL configuration:**
+- A Java keystore file (`self-signed.jks`) must be present in `src/test/resources/`
+- Default keystore password: `edwinpass` (configurable in the compose file)
+
 ### Starting Services
+
+#### Standard Configuration
 
 ```bash
 # Start all services
@@ -128,7 +147,28 @@ docker-compose down
 docker-compose down -v
 ```
 
+#### SSL/TLS Configuration
+
+```bash
+# Start all services with SSL/TLS
+docker-compose -f docker-compose-ssl.yml up -d
+
+# Start only OpenSearch with SSL/TLS
+docker-compose -f docker-compose-ssl.yml up -d opensearch
+
+# View logs
+docker-compose -f docker-compose-ssl.yml logs -f opensearch
+
+# Stop all services
+docker-compose -f docker-compose-ssl.yml down
+
+# Stop and remove volumes (clean slate)
+docker-compose -f docker-compose-ssl.yml down -v
+```
+
 ### Service URLs
+
+#### Standard Configuration
 
 Once services are running:
 - OpenSearch: http://localhost:9200
@@ -136,6 +176,17 @@ Once services are running:
 - Grafana: http://localhost:3000 (admin/admin)
 - PostgreSQL: localhost:5432
 - Kafka: localhost:9094 (external listener)
+
+#### SSL/TLS Configuration
+
+Once services are running:
+- OpenSearch: https://localhost:9200 (admin/admin)
+- OpenSearch Dashboards: http://localhost:5601 (admin/admin)
+- Grafana: http://localhost:3000 (admin/admin)
+- PostgreSQL: localhost:5432
+- Kafka: localhost:9094 (external listener)
+
+**Note**: When using the SSL configuration, you'll need to configure your Java client to trust the self-signed certificate. The keystore file at `src/test/resources/self-signed.jks` is used by both the OpenSearch container and your Java application.
 
 ## Project Structure
 
@@ -160,7 +211,8 @@ ai-taxi/
 │       │   └── AppTest.java                # Application tests
 │       └── resources/
 │           └── test.properties
-├── docker-compose.yml                       # Docker services configuration
+├── docker-compose.yml                       # Docker services configuration (standard)
+├── docker-compose-ssl.yml                   # Docker services configuration (SSL/TLS enabled)
 ├── pom.xml                                  # Maven project configuration
 └── README.md                                # This file
 ```

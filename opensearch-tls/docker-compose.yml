@@ -1,0 +1,101 @@
+
+services:
+  opensearch-node1:
+    # image: opensearchproject/opensearch:2.15.0
+    image: opensearchproject/opensearch:3.3.2
+    container_name: opensearch-node1
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node1
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=SuperSecret123!
+
+      # Security plugin on
+      - plugins.security.disabled=false
+      - DISABLE_SECURITY_PLUGIN=false
+#
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+
+      # Optional, for initial index
+      - plugins.security.allow_default_init_securityindex=true
+
+      # --- HTTP TLS (REST) ---
+      - plugins.security.ssl.http.enabled=true
+      - plugins.security.ssl.http.keystore_type=JKS
+      - plugins.security.ssl.http.keystore_filepath=certs/opensearch-keystore.jks
+      - plugins.security.ssl.http.keystore_password=changeit
+      - plugins.security.ssl.http.keystore_alias=opensearch-node1
+
+      - plugins.security.ssl.http.truststore_type=JKS
+      - plugins.security.ssl.http.truststore_filepath=certs/truststore.jks
+      - plugins.security.ssl.http.truststore_password=changeit
+
+      # --- Transport TLS (node-to-node) ---
+      - plugins.security.ssl.transport.enabled=true
+      - plugins.security.ssl.transport.enforce_hostname_verification=false
+      - plugins.security.ssl.transport.keystore_type=JKS
+      - plugins.security.ssl.transport.keystore_filepath=certs/opensearch-keystore.jks
+      - plugins.security.ssl.transport.keystore_password=changeit
+      - plugins.security.ssl.transport.keystore_alias=opensearch-node1
+
+      - plugins.security.ssl.transport.truststore_type=JKS
+      - plugins.security.ssl.transport.truststore_filepath=certs/truststore.jks
+      - plugins.security.ssl.transport.truststore_password=changeit
+
+      # Admin DN should match a cert DN you actually use for admin operations
+      - plugins.security.authcz.admin_dn=CN=opensearch-node1
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - opensearch-data1:/usr/share/opensearch/data
+      - ./certs:/usr/share/opensearch/config/certs:ro
+    ports:
+      - "9200:9200"  # HTTPS
+      - "9600:9600"  # Performance analyzer
+    networks:
+      - opensearch-net
+
+  opensearch-dashboards:
+    # image: opensearchproject/opensearch-dashboards:2.15.0
+    image: opensearchproject/opensearch-dashboards:3.3.0
+    container_name: opensearch-dashboards
+    depends_on:
+      - opensearch-node1
+    environment:
+      # Point Dashboards to the HTTPS OpenSearch endpoint
+      - OPENSEARCH_HOSTS=["https://opensearch-node1:9200"]
+
+      # Use the admin user from the demo security config
+      - OPENSEARCH_USERNAME=admin
+      # - OPENSEARCH_PASSWORD=AdminPassw0rd!
+      - OPENSEARCH_PASSWORD=admin
+
+      # For a self-signed cert in dev, easiest is to disable verification here
+      - OPENSEARCH_SSL_VERIFICATIONMODE=none
+
+      # Standard Dashboards server options
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=5601
+
+    # volumes:
+    #   - ./dashboards/opensearch_dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml:ro
+    #   - ./certs/admin-keystore.jks:/usr/share/opensearch-dashboards/config/admin-keystore.jks:ro
+    #   - ./certs/truststore.jks:/usr/share/opensearch-dashboards/config/truststore.jks:ro
+
+    ports:
+      - "5601:5601"
+    networks:
+      - opensearch-net
+
+networks:
+  opensearch-net:
+    driver: bridge
+
+volumes:
+  opensearch-data1:
+

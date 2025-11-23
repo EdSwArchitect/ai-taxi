@@ -1,0 +1,17 @@
+server.host: "0.0.0.0"
+server.ssl.enabled: true
+server.ssl.keystore.path: /usr/share/opensearch-dashboards/config/admin-keystore.jks
+server.ssl.keystore.password: "changeit"
+
+opensearch.ssl.verificationMode: none
+opensearch.ssl.keystore.path: /usr/share/opensearch-dashboards/config/admin-keystore.jks
+opensearch.ssl.keystore.password: "changeit"
+opensearch.ssl.truststore.path: /usr/share/opensearch-dashboards/config/truststore.jks
+opensearch.ssl.truststore.password: "changeit"
+
+opensearch.hosts:
+  - "https://opensearch-node1:9200"
+
+# Dashboards requires admin credentials
+opensearch.username: "admin"
+opensearch.password: "SuperSecret123!"

@@ -22,7 +22,7 @@
         <maven.surefire.plugin.version>3.2.2</maven.surefire.plugin.version>
         <parquet.version>1.15.2</parquet.version>
         <hadoop.version>3.3.6</hadoop.version>
-        <opensearch.version>3.3.0</opensearch.version>
+        <opensearch.version>3.3.2</opensearch.version>
         <testcontainers.version>1.19.3</testcontainers.version>
     </properties>
 
@@ -65,14 +65,42 @@
         <!-- OpenSearch Java Client -->
         <dependency>
             <groupId>org.opensearch.client</groupId>
-            <artifactId>opensearch-rest-client</artifactId>
-            <version>${opensearch.version}</version>
+            <artifactId>opensearch-java</artifactId>
+            <version>3.3.0</version>
+            <exclusions>
+                <!-- Exclude HttpClient 5 dependencies to use aligned compatible versions -->
+                <exclusion>
+                    <groupId>org.apache.httpcomponents.client5</groupId>
+                    <artifactId>httpclient5</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.httpcomponents.core5</groupId>
+                    <artifactId>httpcore5</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.httpcomponents.core5</groupId>
+                    <artifactId>httpcore5-h2</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        
+        <!-- Add aligned HttpClient 5 modules - all using 5.2.1 for compatibility -->
+        <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+            <version>5.2.1</version>
         </dependency>
         <dependency>
-            <groupId>org.opensearch.client</groupId>
-            <artifactId>opensearch-java</artifactId>
-            <version>${opensearch.version}</version>
+            <groupId>org.apache.httpcomponents.core5</groupId>
+            <artifactId>httpcore5</artifactId>
+            <version>5.2.1</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents.core5</groupId>
+            <artifactId>httpcore5-h2</artifactId>
+            <version>5.2.1</version>
+        </dependency>
+
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>

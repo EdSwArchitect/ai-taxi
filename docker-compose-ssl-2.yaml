@@ -1,4 +1,3 @@
-version: "3.8"
 
 # ============================================================================
 # DOCKER COMPOSE SETUP FOR OPENSEARCH WITH SSL/TLS
@@ -173,7 +172,8 @@ services:
       - plugins.security.ssl.http.keystore_type=JKS
       - plugins.security.ssl.http.keystore_filepath=certs/opensearch-keystore.jks
       - plugins.security.ssl.http.keystore_password=changeit
-      - plugins.security.ssl.http.keystore_alias=opensearch-node1
+#      - plugins.security.ssl.http.keystore_alias=opensearch-node1
+      - plugins.security.ssl.http.keystore_alias=localhost
 
       - plugins.security.ssl.http.truststore_type=JKS
       - plugins.security.ssl.http.truststore_filepath=certs/truststore.jks
@@ -185,14 +185,14 @@ services:
       - plugins.security.ssl.transport.keystore_type=JKS
       - plugins.security.ssl.transport.keystore_filepath=certs/opensearch-keystore.jks
       - plugins.security.ssl.transport.keystore_password=changeit
-      - plugins.security.ssl.transport.keystore_alias=opensearch-node1
+      - plugins.security.ssl.transport.keystore_alias=localhost
 
       - plugins.security.ssl.transport.truststore_type=JKS
       - plugins.security.ssl.transport.truststore_filepath=certs/truststore.jks
       - plugins.security.ssl.transport.truststore_password=changeit
 
       # Admin DN should match a cert DN you actually use for admin operations
-      - plugins.security.authcz.admin_dn=CN=opensearch-node1
+      - plugins.security.authcz.admin_dn=CN=localhost
 
     ulimits:
       memlock:

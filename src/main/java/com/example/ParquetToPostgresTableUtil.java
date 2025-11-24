@@ -1,5 +1,9 @@
 package com.example;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.prometheusmetrics.PrometheusConfig;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
@@ -7,14 +11,17 @@ import org.apache.parquet.schema.Type;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Utility class to read Parquet file schema and create PostgreSQL table based on it.
  * Creates tables in the "taxi" schema, creating the schema if necessary.
+ * Includes metrics tracking for files loaded and table entries loaded using Micrometer.
  */
 public class ParquetToPostgresTableUtil {
 
@@ -22,6 +29,126 @@ public class ParquetToPostgresTableUtil {
     private static final String DEFAULT_DB_URL = "jdbc:postgresql://localhost:5432/ai_taxi";
     private static final String DEFAULT_USER = "postgres";
     private static final String DEFAULT_PASSWORD = "postgres";
+
+    // Micrometer Prometheus registry - initialized on first use
+    private static volatile PrometheusMeterRegistry prometheusRegistry;
+    private static final Object registryLock = new Object();
+
+    // Micrometer counters for metrics
+    private static Counter filesLoadedCounter;
+    private static Counter tableEntriesLoadedCounter;
+
+    /**
+     * Gets or creates the Prometheus MeterRegistry instance.
+     * This registry is thread-safe and can be used to expose metrics to Prometheus.
+     *
+     * @return PrometheusMeterRegistry instance
+     */
+    public static PrometheusMeterRegistry getPrometheusRegistry() {
+        if (prometheusRegistry == null) {
+            synchronized (registryLock) {
+                if (prometheusRegistry == null) {
+                    prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+                    // Add registry to global Metrics registry
+                    io.micrometer.core.instrument.Metrics.addRegistry(prometheusRegistry);
+                    initializeCounters();
+                }
+            }
+        }
+        return prometheusRegistry;
+    }
+
+    /**
+     * Initializes Micrometer counters for tracking metrics.
+     */
+    private static void initializeCounters() {
+        MeterRegistry registry = getPrometheusRegistry();
+        
+        filesLoadedCounter = Counter.builder("parquet.files.loaded")
+            .description("Total number of Parquet files processed/loaded")
+            .tag("component", "parquet_to_postgres")
+            .register(registry);
+
+        tableEntriesLoadedCounter = Counter.builder("parquet.table.entries.loaded")
+            .description("Total number of table entries (rows) loaded from Parquet files")
+            .tag("component", "parquet_to_postgres")
+            .register(registry);
+    }
+
+    /**
+     * Ensures counters are initialized (lazy initialization).
+     */
+    private static void ensureCountersInitialized() {
+        if (filesLoadedCounter == null || tableEntriesLoadedCounter == null) {
+            getPrometheusRegistry(); // This will initialize counters
+        }
+    }
+
+    /**
+     * Metrics class to access Micrometer metrics for monitoring.
+     */
+    public static class Metrics {
+        /**
+         * Gets the number of files that have been processed/loaded.
+         *
+         * @return number of files loaded (count from counter)
+         */
+        public static double getFilesLoaded() {
+            ensureCountersInitialized();
+            return filesLoadedCounter.count();
+        }
+
+        /**
+         * Gets the total number of table entries (rows) that have been loaded.
+         *
+         * @return number of table entries loaded (count from counter)
+         */
+        public static double getTableEntriesLoaded() {
+            ensureCountersInitialized();
+            return tableEntriesLoadedCounter.count();
+        }
+
+        /**
+         * Returns a string representation of current metrics.
+         *
+         * @return metrics summary
+         */
+        public static String getSummary() {
+            ensureCountersInitialized();
+            return String.format("Metrics - Files loaded: %.0f, Table entries loaded: %.0f",
+                filesLoadedCounter.count(), tableEntriesLoadedCounter.count());
+        }
+
+        /**
+         * Gets the Prometheus registry for exposing metrics endpoint.
+         *
+         * @return PrometheusMeterRegistry
+         */
+        public static PrometheusMeterRegistry getRegistry() {
+            return getPrometheusRegistry();
+        }
+
+        /**
+         * Gets the Prometheus metrics in scrape format.
+         * This can be exposed via HTTP endpoint for Prometheus to scrape.
+         *
+         * @return Prometheus metrics in scrape format
+         */
+        public static String scrape() {
+            return getPrometheusRegistry().scrape();
+        }
+
+        // Package-private methods for internal use
+        static void incrementFilesLoaded() {
+            ensureCountersInitialized();
+            filesLoadedCounter.increment();
+        }
+
+        static void incrementTableEntriesLoaded(double count) {
+            ensureCountersInitialized();
+            tableEntriesLoadedCounter.increment(count);
+        }
+    }
 
     /**
      * Converts Parquet type to PostgreSQL data type.
@@ -214,8 +341,192 @@ public class ParquetToPostgresTableUtil {
             // Create table
             createTableFromParquetSchema(connection, schemaName, tableName, schema, dropIfExists);
             
+            // Increment files loaded metric
+            Metrics.incrementFilesLoaded();
+            
             System.out.println("Table created successfully: " + schemaName + "." + tableName);
         }
+    }
+
+    /**
+     * Loads data from a Parquet file into a PostgreSQL table.
+     * The table must already exist.
+     *
+     * @param parquetFilePath Path to the Parquet file
+     * @param schemaName The PostgreSQL schema name
+     * @param tableName The table name
+     * @param dbUrl The database URL
+     * @param user The database user
+     * @param password The database password
+     * @param maxRows Maximum number of rows to load (use -1 for all)
+     * @return number of rows loaded
+     * @throws IOException if Parquet file cannot be read
+     * @throws SQLException if database operations fail
+     */
+    public static long loadDataFromParquetFile(
+            String parquetFilePath,
+            String schemaName,
+            String tableName,
+            String dbUrl,
+            String user,
+            String password,
+            int maxRows) throws IOException, SQLException {
+
+        // Read Parquet data
+        System.out.println("Reading data from Parquet file: " + parquetFilePath);
+        List<Map<String, Object>> records = ParquetFileReaderUtil.readParquetFile(parquetFilePath, maxRows);
+        System.out.println("Read " + records.size() + " records from Parquet file");
+
+        if (records.isEmpty()) {
+            System.out.println("No records to load");
+            return 0;
+        }
+
+        // Get schema for column order
+        MessageType schema = ParquetFileReaderUtil.getSchema(parquetFilePath);
+        List<String> columnNames = new ArrayList<>();
+        for (Type field : schema.getFields()) {
+            columnNames.add(sanitizeColumnName(field.getName()));
+        }
+
+        // Connect to database and load data
+        System.out.println("Connecting to database: " + dbUrl);
+        try (Connection connection = DriverManager.getConnection(dbUrl, user, password)) {
+            connection.setAutoCommit(false); // Use batch insert for better performance
+
+            // Build INSERT statement
+            String columnList = String.join(", ", columnNames);
+            List<String> placeholderList = new ArrayList<>();
+            for (int i = 0; i < columnNames.size(); i++) {
+                placeholderList.add("?");
+            }
+            String placeholders = String.join(", ", placeholderList);
+            String insertSql = String.format(
+                "INSERT INTO %s.%s (%s) VALUES (%s)",
+                schemaName, tableName, columnList, placeholders
+            );
+
+            int batchSize = 1000;
+            long rowsLoaded = 0;
+
+            try (PreparedStatement pstmt = connection.prepareStatement(insertSql)) {
+                for (Map<String, Object> record : records) {
+                    int paramIndex = 1;
+                    for (String columnName : columnNames) {
+                        Object value = record.get(columnName);
+                        pstmt.setObject(paramIndex++, value);
+                    }
+                    pstmt.addBatch();
+                    rowsLoaded++;
+
+                    // Execute batch periodically
+                    if (rowsLoaded % batchSize == 0) {
+                        pstmt.executeBatch();
+                        connection.commit();
+                        System.out.println("Loaded " + rowsLoaded + " rows...");
+                    }
+                }
+
+                // Execute remaining batch
+                if (rowsLoaded % batchSize != 0) {
+                    pstmt.executeBatch();
+                    connection.commit();
+                }
+            }
+
+            // Update metrics
+            Metrics.incrementTableEntriesLoaded(rowsLoaded);
+
+            System.out.println("Successfully loaded " + rowsLoaded + " rows into " + schemaName + "." + tableName);
+            return rowsLoaded;
+        }
+    }
+
+    /**
+     * Loads data from a Parquet file into a PostgreSQL table using default connection parameters.
+     *
+     * @param parquetFilePath Path to the Parquet file
+     * @param tableName The table name
+     * @param maxRows Maximum number of rows to load (use -1 for all)
+     * @return number of rows loaded
+     * @throws IOException if Parquet file cannot be read
+     * @throws SQLException if database operations fail
+     */
+    public static long loadDataFromParquetFile(
+            String parquetFilePath,
+            String tableName,
+            int maxRows) throws IOException, SQLException {
+
+        return loadDataFromParquetFile(
+            parquetFilePath,
+            DEFAULT_SCHEMA_NAME,
+            tableName,
+            DEFAULT_DB_URL,
+            DEFAULT_USER,
+            DEFAULT_PASSWORD,
+            maxRows
+        );
+    }
+
+    /**
+     * Creates a table and loads data from a Parquet file in one operation.
+     *
+     * @param parquetFilePath Path to the Parquet file
+     * @param schemaName The PostgreSQL schema name
+     * @param tableName The table name to create
+     * @param dbUrl The database URL
+     * @param user The database user
+     * @param password The database password
+     * @param dropIfExists Whether to drop the table if it already exists
+     * @param maxRows Maximum number of rows to load (use -1 for all)
+     * @return number of rows loaded
+     * @throws IOException if Parquet file cannot be read
+     * @throws SQLException if database operations fail
+     */
+    public static long createTableAndLoadDataFromParquetFile(
+            String parquetFilePath,
+            String schemaName,
+            String tableName,
+            String dbUrl,
+            String user,
+            String password,
+            boolean dropIfExists,
+            int maxRows) throws IOException, SQLException {
+
+        // Create table first
+        createTableFromParquetFile(parquetFilePath, schemaName, tableName, dbUrl, user, password, dropIfExists);
+
+        // Load data
+        return loadDataFromParquetFile(parquetFilePath, schemaName, tableName, dbUrl, user, password, maxRows);
+    }
+
+    /**
+     * Creates a table and loads data from a Parquet file using default connection parameters.
+     *
+     * @param parquetFilePath Path to the Parquet file
+     * @param tableName The table name to create
+     * @param dropIfExists Whether to drop the table if it already exists
+     * @param maxRows Maximum number of rows to load (use -1 for all)
+     * @return number of rows loaded
+     * @throws IOException if Parquet file cannot be read
+     * @throws SQLException if database operations fail
+     */
+    public static long createTableAndLoadDataFromParquetFile(
+            String parquetFilePath,
+            String tableName,
+            boolean dropIfExists,
+            int maxRows) throws IOException, SQLException {
+
+        return createTableAndLoadDataFromParquetFile(
+            parquetFilePath,
+            DEFAULT_SCHEMA_NAME,
+            tableName,
+            DEFAULT_DB_URL,
+            DEFAULT_USER,
+            DEFAULT_PASSWORD,
+            dropIfExists,
+            maxRows
+        );
     }
 
     /**

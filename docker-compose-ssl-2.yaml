@@ -33,6 +33,18 @@
 #    Username: admin
 #    Password: admin
 #
+# 5. Access Prometheus:
+#    http://localhost:9090
+#
+# 6. Access Grafana:
+#    http://localhost:3000
+#    Username: admin
+#    Password: admin
+#    - Prometheus data source is automatically configured
+#    - Dashboards are automatically loaded:
+#      * "OpenSearch Data Loading Metrics" - tracks Parquet files and documents loaded into OpenSearch
+#      * "PostgreSQL Data Loading Metrics" - tracks Parquet files and rows loaded into PostgreSQL
+#
 # STOPPING SERVICES:
 # ------------------
 #    docker-compose -f docker-compose-ssl-2.yaml down
@@ -72,6 +84,11 @@
 # - Admin username: admin
 # - Admin password: admin (set in OPENSEARCH_INITIAL_ADMIN_PASSWORD but test uses "admin")
 # - SSL truststore: src/test/resources/truststore.jks (password: changeit)
+# - Prometheus: Configured to scrape metrics from applications
+#   * Update prometheus/prometheus.yml to match your application's metrics endpoint
+#   * Default target: host.docker.internal:8080 (change as needed)
+# - Grafana: Pre-configured to work with Prometheus
+#   * Add Prometheus data source in Grafana UI: http://prometheus:9090
 #
 # TROUBLESHOOTING:
 # ----------------
@@ -259,7 +276,33 @@ services:
   #   networks:
   #     - ai-taxi-network
 
-  # Grafana
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ai-taxi-prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - ai-taxi-network
+    depends_on:
+      - opensearch-node1
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana for visualization
   grafana:
     image: grafana/grafana:10.2.0
     container_name: ai-taxi-grafana
@@ -269,13 +312,18 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+      # Pre-configure Prometheus as data source
+      - GF_INSTALL_PLUGINS=
     volumes:
       - grafana_data:/var/lib/grafana
+      # Provisioning for automatic Prometheus data source and dashboards configuration
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
     networks:
       - ai-taxi-network
     depends_on:
       - postgres
       - opensearch-node1
+      - prometheus
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
       interval: 30s
@@ -292,6 +340,8 @@ volumes:
   opensearch-data1:
     driver: local
   opensearch_config:
+    driver: local
+  prometheus_data:
     driver: local
   grafana_data:
     driver: local

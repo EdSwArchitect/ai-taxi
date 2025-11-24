@@ -1,0 +1,47 @@
+# Prometheus configuration for scraping metrics
+global:
+  scrape_interval: 15s      # Scrape targets every 15 seconds
+  evaluation_interval: 15s  # Evaluate rules every 15 seconds
+  scrape_timeout: 10s       # Timeout for scrapes
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           # - alertmanager:9093
+
+# Load rules once and periodically evaluate them (optional)
+# rule_files:
+#   # - "first_rules.yml"
+#   # - "second_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Scrape Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # Scrape metrics from the ai-taxi application
+  # Update this target to match your application's metrics endpoint
+  - job_name: 'ai-taxi'
+    static_configs:
+      - targets: ['host.docker.internal:8080']  # Change port as needed
+        labels:
+          service: 'ai-taxi'
+          component: 'parquet-loader'
+
+  # Optional: Scrape OpenSearch metrics if enabled
+  # - job_name: 'opensearch'
+  #   static_configs:
+  #     - targets: ['opensearch-node1:9200']
+  #     scheme: https
+  #     basic_auth:
+  #       username: 'admin'
+  #       password: 'admin'
+  #     tls_config:
+  #       insecure_skip_verify: true
+

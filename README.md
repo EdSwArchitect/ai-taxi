@@ -446,6 +446,45 @@ mvn test
 
 Both `ParquetToOpenSearchUtil` and `ParquetToPostgresTableUtil` include Micrometer metrics integration for Prometheus monitoring.
 
+### MetricsServer
+
+A simple HTTP server (`MetricsServer`) is provided to expose Prometheus metrics for scraping. It combines metrics from both utility classes and serves them at `/metrics` endpoint.
+
+**Starting the Metrics Server:**
+
+```java
+import com.example.MetricsServer;
+
+public class Main {
+    public static void main(String[] args) throws Exception {
+        // Start metrics server on port 8080 (default)
+        MetricsServer metricsServer = MetricsServer.start();
+        
+        // Or specify a custom port
+        // MetricsServer metricsServer = MetricsServer.start(9091);
+        
+        // Your application code here...
+        // Load data, process files, etc.
+        
+        // Metrics will be available at http://localhost:8080/metrics
+        
+        // Keep server running or stop it when done
+        // metricsServer.stop();
+    }
+}
+```
+
+**Running as Standalone:**
+
+```bash
+# Run the metrics server standalone
+java -cp target/ai-taxi-1.0-SNAPSHOT.jar com.example.MetricsServer 8080
+```
+
+**Endpoints:**
+- `http://localhost:8080/metrics` - Prometheus metrics endpoint
+- `http://localhost:8080/health` - Health check endpoint
+
 ### Metrics Exposed
 
 **ParquetToOpenSearchUtil Metrics:**
@@ -470,15 +509,42 @@ String metrics = ParquetToOpenSearchUtil.Metrics.scrape();
 
 ### Exposing Metrics for Prometheus
 
-To expose metrics for Prometheus scraping, you can create a simple HTTP endpoint:
+The `MetricsServer` class provides an HTTP endpoint for Prometheus to scrape metrics automatically. The server combines metrics from both utility classes.
+
+**Using MetricsServer in your application:**
 
 ```java
-// Example: Expose metrics endpoint
-String prometheusMetrics = ParquetToOpenSearchUtil.Metrics.scrape();
-// Return this in HTTP response at /metrics endpoint
+import com.example.MetricsServer;
+import com.example.ParquetToOpenSearchUtil;
+
+public class Main {
+    public static void main(String[] args) throws Exception {
+        // Start metrics server (will be available at http://localhost:8080/metrics)
+        MetricsServer metricsServer = MetricsServer.start(8080);
+        
+        // Your application code - metrics are automatically tracked
+        ParquetToOpenSearchUtil.loadParquetFileToOpenSearch(...);
+        
+        // Metrics are now available at http://localhost:8080/metrics
+        // Prometheus can scrape from this endpoint
+        
+        // Keep server running for Prometheus to scrape
+        Thread.currentThread().join();
+    }
+}
 ```
 
-Prometheus can then scrape this endpoint and visualize metrics in Grafana.
+**Configure Prometheus to scrape:**
+
+Update `prometheus/prometheus.yml`:
+```yaml
+scrape_configs:
+  - job_name: 'ai-taxi'
+    static_configs:
+      - targets: ['host.docker.internal:8080']  # Your metrics server
+```
+
+Prometheus will scrape metrics from `http://host.docker.internal:8080/metrics` and visualize them in Grafana dashboards.
 
 ### Metrics Format
 

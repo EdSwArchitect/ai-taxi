@@ -467,5 +467,43 @@ public class ParquetToOpenSearchUtil {
 
         return loadParquetFileToOpenSearch(parquetFilePath, indexName, truststorePath, dropIfExists, -1);
     }
+
+    public static void main(String[] args) {
+        try {
+                    // Start metrics server (will be available at http://localhost:8080/metrics)
+            MetricsServer metricsServer = MetricsServer.start(8080);
+
+            System.out.println("Metrics server is running. Press Ctrl+C to stop.");
+            
+            // Keep the server running
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                System.out.println("\nShutting down metrics server...");
+                metricsServer.stop();
+            }));
+
+
+            long documentsIndexed = loadParquetFileToOpenSearch("src/main/resources/green_tripdata_2025-01.parquet", "green_tripdata_2025-01", "src/test/resources/truststore.jks", false, -1);
+            System.out.println("Documents indexed: " + documentsIndexed);
+
+            // double filesLoaded = ParquetToOpenSearchUtil.Metrics.getFilesLoaded();
+            // double entriesLoaded = ParquetToOpenSearchUtil.Metrics.getEntriesLoaded();
+            // String summary = ParquetToOpenSearchUtil.Metrics.getSummary();
+            // System.out.println("Summary: " + summary);
+            // System.out.println("Files loaded: " + filesLoaded);
+            // System.out.println("Entries loaded: " + entriesLoaded);
+            // // Get Prometheus scrape format (for HTTP endpoint)
+            // String prometheusMetrics = ParquetToOpenSearchUtil.Metrics.scrape();
+
+            // System.out.println("Prometheus metrics: " + prometheusMetrics);
+            // Keep server running for Prometheus to scrape
+
+            // Thread.currentThread().join();
+
+            // metricsServer.stop();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 }
 

@@ -1,5 +1,6 @@
 # Grafana dashboard provisioning configuration
 # Automatically loads dashboards from the dashboards directory
+# This file should be mounted at /etc/grafana/provisioning/dashboards/
 
 apiVersion: 1
 
@@ -12,6 +13,8 @@ providers:
     editable: true
     allowUiUpdates: true
     options:
+      # Path where dashboard JSON files are located
+      # This path is inside the Grafana container
       path: /etc/grafana/provisioning/dashboards
       foldersFromFilesStructure: false
 

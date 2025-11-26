@@ -23,7 +23,7 @@
         <parquet.version>1.15.2</parquet.version>
         <hadoop.version>3.3.6</hadoop.version>
         <opensearch.version>3.3.2</opensearch.version>
-        <testcontainers.version>1.19.3</testcontainers.version>
+        <testcontainers.version>1.19.8</testcontainers.version>
         <postgresql.version>42.7.1</postgresql.version>
         <micrometer.version>1.13.0</micrometer.version>
     </properties>
@@ -173,10 +173,21 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${maven.surefire.plugin.version}</version>
                 <configuration>
+                    <!-- <argLine>-DDOCKER_CONTEXT=desktop-linux -DDOCKER_HOST=unix:///Users/edwinbrown/.docker/run/docker.sock -DTESTCONTAINERS_RYUK_DISABLED=true -DTESTCONTAINERS_CHECKS_DISABLE=true</argLine> -->
                     <systemPropertyVariables>
                         <java.security.manager></java.security.manager>
                         <parquet.metadata.serialization>false</parquet.metadata.serialization>
+                        <!-- Disable Ryuk which can cause connection issues -->
+                        <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+                        <!-- Explicitly set Docker host to match docker-compose -->
+                        <DOCKER_HOST>unix:///Users/edwinbrown/.docker/run/docker.sock</DOCKER_HOST>
+                        <!-- Set Docker context -->
+                        <DOCKER_CONTEXT>desktop-linux</DOCKER_CONTEXT>
                     </systemPropertyVariables>
+                    <environmentVariables>
+                        <DOCKER_HOST>unix:///Users/edwinbrown/.docker/run/docker.sock</DOCKER_HOST>
+                        <DOCKER_CONTEXT>desktop-linux</DOCKER_CONTEXT>
+                    </environmentVariables>
                 </configuration>
             </plugin>
         </plugins>

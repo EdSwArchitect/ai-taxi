@@ -1,4 +1,4 @@
-package com.example;
+package com.bscllc.ai.taxi;
 
 import java.io.IOException;
 

@@ -1,13 +1,19 @@
-package com.example;
-
-import org.apache.parquet.schema.MessageType;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeAll;
-import static org.junit.jupiter.api.Assertions.*;
+package com.bscllc.ai.taxi;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.parquet.schema.MessageType;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import com.bscllc.ai.taxi.utils.ParquetFileReaderUtil;
 
 /**
  * Test class for reading fhv_tripdata_2025-01.parquet file.

@@ -1,7 +1,4 @@
-package com.example;
-
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+package com.bscllc.ai.taxi;
 
 import java.io.File;
 import java.sql.Connection;
@@ -9,6 +6,10 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import com.bscllc.ai.taxi.utils.ParquetToPostgresTableUtil;
 
 /**
  * Test class demonstrating how to use ParquetToPostgresTableUtil
@@ -16,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class ParquetToPostgresTableTest {
 
-    private static final String PARQUET_FILE = "src/main/resources/green_tripdata_2025-01.parquet";
+    private static final String PARQUET_FILE = "src/main/resources/green_tripdata_2025_01.parquet";
     private static final String TABLE_NAME = "green_tripdata_2025_01";
     private static final String DB_URL = "jdbc:postgresql://localhost:5432/ai_taxi";
     private static final String DB_USER = "postgres";

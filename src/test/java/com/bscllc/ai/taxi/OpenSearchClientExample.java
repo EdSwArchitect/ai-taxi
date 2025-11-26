@@ -1,4 +1,4 @@
-package com.example;
+package com.bscllc.ai.taxi;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;

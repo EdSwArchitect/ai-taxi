@@ -1,4 +1,4 @@
-package com.example;
+package com.bscllc.ai.taxi;
 
 import java.io.IOException;
 
@@ -10,6 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import com.bscllc.ai.taxi.model.ParquetReaderEdwin;
+import com.bscllc.ai.taxi.utils.ParquetFileReaderUtil;
 
 /**
  * Test class to display the schema for fhv_tripdata_2025-01.parquet file.

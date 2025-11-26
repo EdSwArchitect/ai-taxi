@@ -1,4 +1,4 @@
-package com.example;
+package com.bscllc.ai.taxi;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -29,6 +29,8 @@ import org.opensearch.client.opensearch.indices.CreateIndexResponse;
 import org.opensearch.client.opensearch.indices.IndexSettings;
 import org.opensearch.client.transport.OpenSearchTransport;
 import org.opensearch.client.transport.httpclient5.ApacheHttpClient5TransportBuilder;
+
+import com.bscllc.ai.taxi.utils.ParquetFileReaderUtil;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;

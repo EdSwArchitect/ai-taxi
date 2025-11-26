@@ -43,6 +43,25 @@ mvn package
   - The project uses OpenSearch 3.3.0+ for the Java client
   - Docker containers use OpenSearch 3.3.0 (standard) or 3.3.2 (SSL configuration)
 
+## Package Structure
+
+The project uses the package structure `com.bscllc.ai.taxi.*`:
+
+- **`com.bscllc.ai.taxi.model.*`** - Data model classes (record classes for taxi trip data)
+  - `GreenTrip` - Record class for Green taxi trip data with JSON annotations
+  - `YellowTrip` - Record class for Yellow taxi trip data with JSON annotations
+  
+- **`com.bscllc.ai.taxi.utils.*`** - Utility classes for Parquet file processing and database operations
+  - `ParquetFileReaderUtil` - Parquet file reading utility
+  - `ParquetToOpenSearchUtil` - Load Parquet files to OpenSearch
+  - `ParquetToPostgresTableUtil` - Create PostgreSQL tables from Parquet schemas
+  - `DatabaseTableFromParquetUtil` - Generic database table creation utility
+
+- **`com.bscllc.ai.taxi.metrics.*`** - Metrics and monitoring components
+  - `MetricsServer` - HTTP server for exposing Prometheus metrics
+
+All test classes follow the same package structure under `src/test/java/com/bscllc/ai/taxi/`.
+
 ## Dependencies
 
 - Java 21
@@ -53,7 +72,12 @@ mvn package
 - PostgreSQL JDBC Driver 42.7.1
 - Micrometer Core 1.13.0 (for metrics)
 - Micrometer Registry Prometheus 1.13.0 (for Prometheus integration)
-- Testcontainers (for integration testing with OpenSearch)
+- Jackson Databind 2.15.2 (for JSON serialization)
+- Jackson Datatype JSR310 2.15.2 (for Java 8 Time API support)
+- Testcontainers 1.19.3 (for integration testing)
+  - Testcontainers Core
+  - Testcontainers JUnit Jupiter integration
+  - Testcontainers PostgreSQL module
 
 ## Utility Classes
 
@@ -323,17 +347,24 @@ Once services are running:
 ai-taxi/
 ├── src/
 │   ├── main/
-│   │   ├── java/com/example/
-│   │   │   ├── App.java                      # Main application class
-│   │   │   ├── ParquetFileReaderUtil.java    # Parquet file reading utility
-│   │   │   ├── ParquetReaderEdwin.java       # Alternative Parquet reader
-│   │   │   ├── ParquetToOpenSearchUtil.java  # Load Parquet files to OpenSearch
-│   │   │   └── ParquetToPostgresTableUtil.java # Create PostgreSQL tables from Parquet
+│   │   ├── java/com/bscllc/ai/taxi/
+│   │   │   ├── model/
+│   │   │   │   ├── App.java                  # Main application class
+│   │   │   │   ├── GreenTrip.java            # Record class for Green taxi trip data
+│   │   │   │   ├── YellowTrip.java           # Record class for Yellow taxi trip data
+│   │   │   │   └── ParquetReaderEdwin.java   # Alternative Parquet reader
+│   │   │   ├── utils/
+│   │   │   │   ├── ParquetFileReaderUtil.java      # Parquet file reading utility
+│   │   │   │   ├── ParquetToOpenSearchUtil.java    # Load Parquet files to OpenSearch
+│   │   │   │   ├── ParquetToPostgresTableUtil.java # Create PostgreSQL tables from Parquet
+│   │   │   │   └── DatabaseTableFromParquetUtil.java # Generic database table creation utility
+│   │   │   └── metrics/
+│   │   │       └── MetricsServer.java        # HTTP server for Prometheus metrics
 │   │   └── resources/
 │   │       ├── application.properties
 │   │       └── *.parquet                     # Parquet data files
 │   └── test/
-│       ├── java/com/example/
+│       ├── java/com/bscllc/ai/taxi/
 │       │   ├── OpenSearchClientExample.java  # OpenSearch connection example
 │       │   ├── EdwinTest.java                # OpenSearch integration tests
 │       │   ├── GreenTripDataIndexTest.java   # Create OpenSearch index from Parquet
@@ -341,7 +372,19 @@ ai-taxi/
 │       │   ├── FhvTripDataSchemaTest.java    # Schema validation tests
 │       │   ├── FhvTripDataTest.java          # FHV trip data tests
 │       │   ├── ParquetReaderTest.java        # Parquet reader tests
-│       │   └── AppTest.java                  # Application tests
+│       │   ├── model/
+│       │   │   ├── GreenTripTest.java        # Tests for GreenTrip record class
+│       │   │   └── YellowTripTest.java       # Tests for YellowTrip record class
+│       │   ├── metrics/
+│       │   │   └── MetricsServerTest.java    # Tests for MetricsServer
+│       │   └── utils/
+│       │       ├── ParquetToOpenSearchUtilTest.java    # Testcontainers tests for OpenSearch utility
+│       │       ├── ParquetToPostgresTableUtilTest.java # Testcontainers tests for PostgreSQL utility
+│       │       └── DatabaseTableFromParquetUtilTest.java # Testcontainers tests for database table utility
+│       │   └── utils/
+│       │       ├── ParquetToOpenSearchUtilTest.java    # Testcontainers tests for OpenSearch utility
+│       │       ├── ParquetToPostgresTableUtilTest.java # Testcontainers tests for PostgreSQL utility
+│       │       └── DatabaseTableFromParquetUtilTest.java # Testcontainers tests for database table utility
 │       └── resources/
 │           ├── test.properties
 │           ├── truststore.jks                # SSL truststore for OpenSearch
@@ -351,9 +394,24 @@ ai-taxi/
 │   └── truststore.jks                        # SSL truststore
 ├── docker-compose.yml                        # Docker services configuration (standard)
 ├── docker-compose-ssl-2.yaml                 # Docker services with SSL/TLS enabled
+├── prometheus/                               # Prometheus configuration
+│   └── prometheus.yml                        # Prometheus scrape configuration
+├── grafana/                                  # Grafana provisioning
+│   └── provisioning/                         # Auto-provisioning configs
+│       ├── datasources/
+│       │   └── prometheus.yml                # Prometheus datasource config
+│       └── dashboards/                       # Dashboard definitions
 ├── pom.xml                                   # Maven project configuration
 └── README.md                                 # This file
 ```
+
+### Package Organization
+
+The project uses the package structure `com.bscllc.ai.taxi` with the following organization:
+
+- **`model/`** - Data model classes (record classes for taxi trip data)
+- **`utils/`** - Utility classes for Parquet file processing and database operations
+- **`metrics/`** - Metrics and monitoring components
 
 ## Running Tests
 
@@ -391,6 +449,7 @@ mvn test -Dtest=ParquetToPostgresTableTest#testCreateTableFromParquetFile
 
 ### Test Classes
 
+#### Integration Tests
 - **OpenSearchClientExample**: Example of connecting to OpenSearch with SSL/TLS
 - **EdwinTest**: OpenSearch integration tests with SSL/TLS
 - **GreenTripDataIndexTest**: Creates OpenSearch index from Parquet schema
@@ -398,7 +457,41 @@ mvn test -Dtest=ParquetToPostgresTableTest#testCreateTableFromParquetFile
 - **FhvTripDataSchemaTest**: Tests for displaying and validating schema of `fhv_tripdata_2025-01.parquet`
 - **FhvTripDataTest**: Comprehensive tests for reading `fhv_tripdata_2025-01.parquet` file
 - **ParquetReaderTest**: Tests for reading `fhvhv_tripdata_2025-01.parquet` file
-- **AppTest**: Basic unit test for the App class
+
+#### Testcontainers Integration Tests
+
+These test classes use Testcontainers to create isolated, containerized environments for testing utilities:
+
+- **ParquetToOpenSearchUtilTest**: Integration tests for `ParquetToOpenSearchUtil` using isolated OpenSearch containers
+  - Tests index creation from Parquet schema
+  - Tests metrics tracking
+  - Tests zero records handling
+  - Tests index structure verification
+  - Uses GenericContainer with OpenSearch 3.3.0 image
+
+- **ParquetToPostgresTableUtilTest**: Integration tests for `ParquetToPostgresTableUtil` using isolated PostgreSQL containers
+  - Tests table creation from Parquet schema
+  - Tests schema creation if it doesn't exist
+  - Tests table existence checks
+  - Tests metrics tracking
+  - Tests data loading functionality
+  - Uses PostgreSQLContainer with PostgreSQL 15-alpine image
+
+- **DatabaseTableFromParquetUtilTest**: Integration tests for `DatabaseTableFromParquetUtil` using isolated PostgreSQL containers
+  - Tests table creation with JDBC parameters
+  - Tests schema creation
+  - Tests safe table creation (no dropping)
+  - Tests column verification against Parquet schema
+  - Uses PostgreSQLContainer with PostgreSQL 15-alpine image
+
+**Note**: All Testcontainers tests automatically spin up isolated containers for each test run, ensuring clean, reproducible test environments without requiring manual Docker setup.
+
+#### Model Tests
+- **GreenTripTest**: Comprehensive tests for `GreenTrip` record class including JSON serialization/deserialization, record creation, and edge cases (11 test methods)
+- **YellowTripTest**: Comprehensive tests for `YellowTrip` record class including JSON serialization/deserialization, record creation, and edge cases (12 test methods)
+
+#### Metrics Tests
+- **MetricsServerTest**: Tests for `MetricsServer` including server lifecycle, HTTP endpoints (`/metrics`, `/health`), error handling, and concurrent request handling (14 test methods)
 
 ### Running OpenSearch Tests with SSL
 
@@ -418,9 +511,12 @@ mvn test -Dtest=GreenTripDataIndexTest#testCreateIndexFromParquetSchema
 
 ### Test Requirements
 
-- **Docker**: Required for running OpenSearch tests (Testcontainers uses Docker to spin up OpenSearch containers)
+- **Docker**: Required for running Testcontainers integration tests (Testcontainers uses Docker to spin up isolated containers)
   - Ensure Docker is installed and running on your machine
-  - The OpenSearch tests will automatically start an OpenSearch container using Testcontainers
+  - OpenSearch tests automatically start an OpenSearch container using Testcontainers
+  - PostgreSQL tests automatically start a PostgreSQL container using Testcontainers
+  - Containers are isolated per test run, ensuring clean test environments
+  - Containers are automatically cleaned up after tests complete
 
 - **Parquet files** must be present in `src/main/resources/` for the Parquet tests to run successfully:
   - `fhv_tripdata_2025-01.parquet`
@@ -453,7 +549,11 @@ A simple HTTP server (`MetricsServer`) is provided to expose Prometheus metrics 
 **Starting the Metrics Server:**
 
 ```java
+<<<<<<< HEAD
 import com.example.MetricsServer;
+=======
+import com.bscllc.ai.taxi.metrics.MetricsServer;
+>>>>>>> 813481c (status)
 
 public class Main {
     public static void main(String[] args) throws Exception {
@@ -478,7 +578,11 @@ public class Main {
 
 ```bash
 # Run the metrics server standalone
+<<<<<<< HEAD
 java -cp target/ai-taxi-1.0-SNAPSHOT.jar com.example.MetricsServer 8080
+=======
+java -cp target/ai-taxi-1.0-SNAPSHOT.jar com.bscllc.ai.taxi.metrics.MetricsServer 8080
+>>>>>>> 813481c (status)
 ```
 
 **Endpoints:**
@@ -514,8 +618,8 @@ The `MetricsServer` class provides an HTTP endpoint for Prometheus to scrape met
 **Using MetricsServer in your application:**
 
 ```java
-import com.example.MetricsServer;
-import com.example.ParquetToOpenSearchUtil;
+import com.bscllc.ai.taxi.metrics.MetricsServer;
+import com.bscllc.ai.taxi.utils.ParquetToOpenSearchUtil;
 
 public class Main {
     public static void main(String[] args) throws Exception {
@@ -559,7 +663,93 @@ opensearch_parquet_files_loaded{component="parquet_to_opensearch"} 1.0
 opensearch_parquet_entries_loaded{component="parquet_to_opensearch"} 100000.0
 ```
 
+## Data Models
+
+### GreenTrip
+
+Java record class representing Green Taxi trip data from NYC green_tripdata Parquet files.
+
+**Location**: `com.bscllc.ai.taxi.model.GreenTrip`
+
+**Features**:
+- Annotated for JSON serialization/deserialization using Jackson
+- 20 fields including vendor ID, pickup/dropoff times, passenger count, trip distance, fare information, etc.
+- Uses `lpep_pickup_datetime` and `lpep_dropoff_datetime` for timestamps
+- All fields are nullable to handle missing data
+
+**Usage**:
+```java
+import com.bscllc.ai.taxi.model.GreenTrip;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+ObjectMapper mapper = new ObjectMapper();
+mapper.registerModule(new JavaTimeModule());
+
+// Read from JSON
+GreenTrip trip = mapper.readValue(jsonString, GreenTrip.class);
+
+// Write to JSON
+String json = mapper.writeValueAsString(trip);
+```
+
+### YellowTrip
+
+Java record class representing Yellow Taxi trip data from NYC yellow_tripdata Parquet files.
+
+**Location**: `com.bscllc.ai.taxi.model.YellowTrip`
+
+**Features**:
+- Annotated for JSON serialization/deserialization using Jackson
+- 19 fields including vendor ID, pickup/dropoff times, passenger count, trip distance, fare information, etc.
+- Uses `tpep_pickup_datetime` and `tpep_dropoff_datetime` for timestamps (TPEP = Taxi & Limousine Commission Passenger Enhancement Program)
+- All fields are nullable to handle missing data
+
+**Usage**:
+```java
+import com.bscllc.ai.taxi.model.YellowTrip;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+ObjectMapper mapper = new ObjectMapper();
+mapper.registerModule(new JavaTimeModule());
+
+// Read from JSON
+YellowTrip trip = mapper.readValue(jsonString, YellowTrip.class);
+
+// Write to JSON
+String json = mapper.writeValueAsString(trip);
+```
+
 ## Utility Classes
+
+### DatabaseTableFromParquetUtil
+
+Generic utility class to create a database table from a Parquet file schema.
+
+**Location**: `com.bscllc.ai.taxi.utils.DatabaseTableFromParquetUtil`
+
+**Features**:
+- Creates database schema if it doesn't exist
+- Creates table only if it doesn't exist (safe, idempotent operation)
+- Supports any JDBC-compatible database
+- Automatic type conversion from Parquet to database types
+
+**Usage**:
+```java
+import com.bscllc.ai.taxi.utils.DatabaseTableFromParquetUtil;
+
+// Create table from Parquet schema
+DatabaseTableFromParquetUtil.createTable(
+    "jdbc:postgresql://localhost:5432/ai_taxi",
+    "taxi",              // database schema
+    "postgres",          // user
+    "postgres",          // password
+    "src/main/resources/green_tripdata_2025-01.parquet",
+    "green_tripdata_2025_01",
+    true  // drop if exists
+);
+```
 
 ### ParquetFileReaderUtil
 
@@ -581,7 +771,7 @@ Alternative Parquet reader implementation with:
 ### Example 1: Load Parquet File to OpenSearch
 
 ```java
-import com.example.ParquetToOpenSearchUtil;
+import com.bscllc.ai.taxi.utils.ParquetToOpenSearchUtil;
 
 public class LoadToOpenSearchExample {
     public static void main(String[] args) throws Exception {
@@ -604,7 +794,7 @@ public class LoadToOpenSearchExample {
 ### Example 2: Create PostgreSQL Table from Parquet Schema
 
 ```java
-import com.example.ParquetToPostgresTableUtil;
+import com.bscllc.ai.taxi.utils.ParquetToPostgresTableUtil;
 
 public class LoadToPostgresExample {
     public static void main(String[] args) throws Exception {
@@ -622,7 +812,36 @@ public class LoadToPostgresExample {
 }
 ```
 
-### Example 3: Running Tests
+### Example 3: Using Record Models with JSON
+
+```java
+import com.bscllc.ai.taxi.model.GreenTrip;
+import com.bscllc.ai.taxi.utils.ParquetFileReaderUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+public class ParseGreenTripExample {
+    public static void main(String[] args) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        
+        // Read Parquet data
+        var records = ParquetFileReaderUtil.readParquetFile(
+            "src/main/resources/green_tripdata_2025-01.parquet", 1
+        );
+        
+        // Convert to JSON and parse as GreenTrip
+        String json = mapper.writeValueAsString(records.get(0));
+        GreenTrip trip = mapper.readValue(json, GreenTrip.class);
+        
+        System.out.println("Trip: " + trip);
+        System.out.println("Pickup time: " + trip.lpepPickupDatetime());
+        System.out.println("Distance: " + trip.tripDistance());
+    }
+}
+```
+
+### Example 4: Running Tests
 
 ```bash
 # Test OpenSearch connection
@@ -633,6 +852,18 @@ mvn test -Dtest=GreenTripDataIndexTest#testCreateIndexFromParquetSchema
 
 # Create PostgreSQL table from Parquet schema
 mvn test -Dtest=ParquetToPostgresTableTest#testCreateTableFromParquetFile
+
+# Test record model classes
+mvn test -Dtest=GreenTripTest
+mvn test -Dtest=YellowTripTest
+
+# Test metrics server
+mvn test -Dtest=MetricsServerTest
+
+# Test utility classes with Testcontainers
+mvn test -Dtest=ParquetToOpenSearchUtilTest
+mvn test -Dtest=ParquetToPostgresTableUtilTest
+mvn test -Dtest=DatabaseTableFromParquetUtilTest
 ```
 
 ## License

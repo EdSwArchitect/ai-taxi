@@ -45,4 +45,3 @@ scrape_configs:
   #     tls_config:
   #       insecure_skip_verify: true
 
-
